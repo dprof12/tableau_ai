@@ -3,134 +3,49 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Tableau AI Insight Extension</title>
+  <title>Tableau AI Insight</title>
   
   <!-- Google Fonts: Inter & Plus Jakarta Sans -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700&family=Roboto:wght@400;500;700&family=Open+Sans:wght@400;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700&display=swap" rel="stylesheet">
   
   <!-- Stylesheet -->
   <link rel="stylesheet" href="css/style.css">
 
-  <!-- Tableau Extensions JS SDK (Local file for reliable sandbox loading) -->
+  <!-- Tableau Extensions JS SDK -->
   <script src="js/tableau.extensions.1.latest.js"></script>
   
   <!-- Marked.js for rendering markdown output -->
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 </head>
 <body>
-  <div class="extension-container" id="appContainer">
+  <div class="pure-text-container" id="appContainer">
     
-    <!-- Top Header Bar -->
-    <header class="header-bar">
-      <div class="header-left">
-        <div class="ai-badge">
-          <span class="status-dot" id="statusDot"></span>
-          <span class="badge-title">AI Insight</span>
-        </div>
-        <div class="worksheet-selector-wrapper">
-          <label for="worksheetSelect" class="sr-only">Target Worksheet</label>
-          <select id="worksheetSelect" class="select-input" title="Pilih Worksheet untuk dianalisis">
-            <option value="">Memuat worksheet...</option>
-          </select>
-        </div>
+    <!-- Skeleton Loading State (Minimalist shimmer) -->
+    <div id="loadingView" class="loading-state hidden">
+      <div class="shimmer-line line-title"></div>
+      <div class="shimmer-line line-full"></div>
+      <div class="shimmer-line line-three-quarters"></div>
+      <div class="loading-subtle-hint">
+        <span class="spinner-dot"></span>
+        <span>Menyusun insight data...</span>
       </div>
+    </div>
 
-      <div class="header-right">
-        <!-- Font Controller Toolbar -->
-        <div class="toolbar-group">
-          <!-- Font Family Dropdown -->
-          <select id="fontFamilySelect" class="select-input-sm" title="Ubah Font Family">
-            <option value="'Inter', sans-serif">Inter</option>
-            <option value="'Plus Jakarta Sans', sans-serif">Jakarta Sans</option>
-            <option value="'Segoe UI', sans-serif">Segoe UI</option>
-            <option value="'Roboto', sans-serif">Roboto</option>
-            <option value="'Open Sans', sans-serif">Open Sans</option>
-            <option value="Arial, sans-serif">Arial</option>
-          </select>
+    <!-- Pure Insight Text Area -->
+    <div id="insightView" class="insight-view-text">
+      <p class="placeholder-text">Menghubungkan ke Tableau...</p>
+    </div>
 
-          <!-- Font Size Buttons -->
-          <div class="font-size-stepper" title="Ubah Ukuran Font">
-            <button id="btnFontDec" class="icon-btn-sm" aria-label="Kecilkan Font">A-</button>
-            <span id="fontSizeDisplay" class="size-label">14px</span>
-            <button id="btnFontInc" class="icon-btn-sm" aria-label="Besarkan Font">A+</button>
-          </div>
-        </div>
-
-        <!-- Action Buttons -->
-        <div class="action-group">
-          <button id="btnCopy" class="action-btn" title="Salin Narasi Insight">
-            <svg class="icon-svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
-              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-            </svg>
-            <span class="btn-text">Salin</span>
-          </button>
-          <button id="btnRefresh" class="action-btn primary" title="Generate Ulang Insight">
-            <svg id="refreshIcon" class="icon-svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M23 4v6h-6"></path>
-              <path d="M1 20v-6h6"></path>
-              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
-            </svg>
-          </button>
-        </div>
-      </div>
-    </header>
-
-    <!-- Main Content Area -->
-    <main class="content-body" id="insightContentBody">
-      
-      <!-- Skeleton Loading State -->
-      <div id="loadingView" class="loading-state hidden">
-        <div class="shimmer-line line-title"></div>
-        <div class="shimmer-line line-full"></div>
-        <div class="shimmer-line line-three-quarters"></div>
-        <div class="shimmer-line line-half"></div>
-        <div class="loading-label">
-          <span class="spinner-sm"></span>
-          <span>Menganalisis data Tableau & menyusun narasi insight...</span>
-        </div>
-      </div>
-
-      <!-- Insight Narrative Display -->
-      <div id="insightView" class="insight-view custom-styled-text">
-        <div class="empty-state">
-          <div class="empty-icon">📊</div>
-          <h3>Menghubungkan ke Tableau...</h3>
-          <p>Insight otomatis akan muncul begitu data worksheet terinisialisasi.</p>
-        </div>
-      </div>
-
-      <!-- Error State -->
-      <div id="errorView" class="error-view hidden">
-        <div class="error-box">
-          <div class="error-header">
-            <span class="error-icon">⚠️</span>
-            <strong>Gagal Menghasilkan Insight</strong>
-          </div>
-          <p id="errorMessage" class="error-msg">Terjadi kesalahan koneksi ke server AI.</p>
-          <button id="btnRetry" class="retry-btn">Coba Lagi</button>
-        </div>
-      </div>
-
-    </main>
-
-    <!-- Footer Metadata Bar -->
-    <footer class="footer-bar">
-      <div class="footer-meta">
-        <span id="metaDataPoints" class="meta-item">0 Data Points</span>
-        <span class="meta-divider">•</span>
-        <span id="metaTimestamp" class="meta-item">Menunggu filter...</span>
-      </div>
-      <div class="footer-status" id="modelInfoBadge">
-        <span class="ai-provider-text">Auto-Refresh Active</span>
-      </div>
-    </footer>
+    <!-- Error Message Display -->
+    <div id="errorView" class="error-view-inline hidden">
+      <p id="errorMessage" class="error-inline-msg">Gagal memuat insight.</p>
+    </div>
 
   </div>
 
-  <!-- Main Application Logic Script -->
+  <!-- Main Logic -->
   <script src="js/app.js"></script>
 </body>
 </html>
