@@ -4,6 +4,8 @@ import OpenAI from 'openai';
 /**
  * Serverless Handler for Tableau AI Insight Generation
  * Strictly focuses on currently filtered year/period with zero redundancy.
+ * Universal support for all Tableau dashboard domains & filters.
+ * [Git Push Test Update]
  */
 export default async function handler(req, res) {
   // 1. CORS Headers
