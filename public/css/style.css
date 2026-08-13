@@ -7,19 +7,10 @@
   --user-font-size: 13.5px;
   --line-height-ratio: 1.6;
   
-  --text-primary: #1e293b;
-  --text-muted: #94a3b8;
+  --text-primary: #000000;
+  --text-muted: #666666;
   --primary-accent: #2563eb;
   --card-border: #e2e8f0;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --text-primary: #f1f5f9;
-    --text-muted: #64748b;
-    --primary-accent: #3b82f6;
-    --card-border: #334155;
-  }
 }
 
 * {
@@ -35,7 +26,7 @@ html, body {
   overflow-x: hidden;
   background-color: transparent !important;
   font-family: var(--user-font-family);
-  color: var(--text-primary);
+  color: #000000 !important;
   -webkit-font-smoothing: antialiased;
 }
 
