@@ -49,6 +49,16 @@ html, body {
   flex-direction: column;
 }
 
+/* Bold Title Header */
+.insight-title-header {
+  font-family: var(--user-font-family);
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 6px;
+  letter-spacing: -0.2px;
+}
+
 /* Insight View Text Formatting */
 .insight-view-text {
   font-family: var(--user-font-family);
