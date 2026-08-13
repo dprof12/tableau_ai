@@ -1,0 +1,29 @@
+{
+  "name": "tableau-ai-insight",
+  "version": "1.0.0",
+  "description": "Tableau Dashboard Extension for Real-time AI Data Insights",
+  "main": "api/generate-insight.js",
+  "type": "module",
+  "scripts": {
+    "dev": "vercel dev",
+    "test-insight": "node test/test-payload.js"
+  },
+  "keywords": [
+    "tableau",
+    "tableau-extension",
+    "ai",
+    "insights",
+    "gemini",
+    "openai",
+    "vercel"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@google/generative-ai": "^0.24.0",
+    "openai": "^4.86.0"
+  },
+  "devDependencies": {
+    "dotenv": "^16.4.7"
+  }
+}
