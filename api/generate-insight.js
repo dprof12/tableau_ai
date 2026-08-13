@@ -69,22 +69,22 @@ export default async function handler(req, res) {
       ? appliedFilters.map(f => `${f.fieldName}: ${f.appliedValues?.join(', ') || 'Semua'}`).join(' | ')
       : 'Semua Filter Aktif';
 
-    // 4. Construct Highly Targeted System & User Prompt
-    const systemPrompt = `Anda adalah Analis Data Eksekutif. Tugas Anda adalah menulis narasi insight yang fokus HANYA pada tahun/periode yang SEDANG DIPILIH pada filter Tableau.
+    // 4. Construct Universal, Adaptive & Context-Aware Prompt
+    const systemPrompt = `Anda adalah Analis Data Eksekutif Senior. Tugas Anda adalah menghasilkan narasi insight yang tajam, ringkas, dan fokus HANYA pada konteks filter/kondisi data yang SEDANG AKTIF di Tableau Dashboard.
 
-PANDUAN KETAT:
-1. FOKUS HANYA PADA TAHUN / FILTER AKTIF:
-   - Jika filter menunjukkan tahun tertentu (contoh: Tahun 2024 atau 2026), ceritakan HANYA data dan kinerja untuk tahun tersebut.
-   - JANGAN menjabarkan atau menganalisis tahun-tahun lain yang tidak dipilih, KECUALI menyebutkan satu angka perbandingan pertumbuhan YoY dengan tahun sebelumnya (misal: "naik 22,53% dari tahun lalu").
-2. STRUKTUR NARASI RINGKAS (1-2 Paragraf Padat):
-   - Sebutkan Tahun & batas bulan data (misal: "Tahun **2024** penuh" atau "Tahun **2026** hingga bulan **Juni**").
-   - Sebutkan Total Angka / Metrik Utama pada tahun tersebut dan perbandingan pertumbuhannya (YoY) jika ada.
-   - Sebutkan tren bulanan (bulan dengan volume tertinggi/puncak dan terendah beserta angkanya).
-   - Sebutkan kontributor moda transportasi terbanyak/dominan (misal: Transjakarta, KRL, dsb.) beserta angkanya.
-3. TANPA BASA-BASI & BEBAS PENGULANGAN (ZERO REDUNDANCY):
-   - JANGAN ada kalimat pengantar seperti "Berikut analisis...", "Berdasarkan data...", dsb. Langsung ke fakta data!
-   - Setiap angka dan nama entitas hanya disebutkan TEPAT SATU KALI.
-   - Gunakan format **bold** untuk angka kunci, nama bulan, tahun, dan moda transportasi.`;
+PANDUAN UNIVERSAL (DAPAT DITERAPKAN DI SEMUA JENIS DASHBOARD):
+1. FOKUS PADA KONTEKS FILTER AKTIF:
+   - Identifikasi semua filter yang sedang aktif (baik itu Dimensi Waktu/Tahun/Bulan, Wilayah/Geografis, Kategori/Jenis Layanan, Status, dsb.).
+   - Ceritakan data, pencapaian, dan metrik yang sesuai dengan irisan filter yang sedang aktif tersebut.
+   - Jangan membahas data di luar filter yang dipilih, kecuali untuk memberikan konteks perbandingan yang relevan (misal: persentase pertumbuhan dibanding periode lalu, atau perbandingan terhadap rata-rata).
+2. STRUKTUR NARASI ADAPTIF (1-2 Paragraf Padat & Mengalir):
+   - Nilai / Metrik Utama: Sebutkan angka total/realisasi utama saat ini sesuai filter yang aktif.
+   - Distribusi / Breakdown: Sebutkan proporsi atau kontributor terbesar & terkecil (misal: jenis kategori, wilayah, atau moda) beserta angkanya.
+   - Dinamika Tren / Perbandingan: Sebutkan tren (bulan/waktu puncak vs terendah, atau perbandingan YoY/MoM) jika terdapat variabel waktu.
+3. PRINSIP PENULISAN:
+   - Lugas, profesional, langsung ke fakta data, TANPA kalimat pembuka/pengantar basa-basi (tanpa "Berikut analisis...", "Berdasarkan data...", dsb.).
+   - BEBAS PENGULANGAN (ZERO REDUNDANCY): Setiap fakta dan angka hanya disebutkan SATU KALI.
+   - Gunakan format **bold** untuk angka kunci, nama kategori/moda/wilayah, dan periode.`;
 
     const userPrompt = `### KONTEKS FILTER DASHBOARD:
 - Dashboard: ${dashboardName}
@@ -93,7 +93,7 @@ PANDUAN KETAT:
 ### DATA VISUAL DARI WORKSHETS TABLEAU:
 ${formattedDataText}
 
-Tuliskan narasi insight yang fokus HANYA pada periode/tahun filter aktif di atas:`;
+Tuliskan narasi insight eksekutif yang fokus pada data terfilter di atas:`;
 
     // 5. Invoke LLM (Gemini or OpenAI)
     let insightResult = '';
