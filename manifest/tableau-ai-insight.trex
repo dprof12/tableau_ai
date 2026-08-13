@@ -14,7 +14,7 @@
       Untuk pengujian lokal: https://localhost:3000/ui.html atau URL tunnel HTTPS.
     -->
     <source-location>
-      <url>https://YOUR_VERCEL_APP_NAME.vercel.app/ui.html</url>
+      <url>https://tableau-ai.vercel.app/ui.html</url>
     </source-location>
     
     <icon></icon>
