@@ -1,6 +1,6 @@
 /**
  * Tableau AI Insight Extension - Frontend Application Logic
- * Integrates Tableau Extensions SDK, Multi/Single Worksheet Data Extraction,
+ * Integrates Official Tableau Extensions SDK, Multi/Single Worksheet Data Extraction,
  * Auto-Refresh on Filter/Parameter Changed, Font Customization, and AI Proxy.
  */
 
@@ -11,7 +11,7 @@ const state = {
   availableWorksheets: [],
   filterUnregisterHandlers: [],
   debounceTimer: null,
-  debounceDelayMs: 800,
+  debounceDelayMs: 600,
   isLoading: false,
   fontSize: 14,
   fontFamily: "'Inter', sans-serif",
@@ -137,45 +137,49 @@ function setupEventListeners() {
  * 3. Initialize Tableau Extensions SDK
  */
 function initTableauExtension() {
-  if (typeof tableau !== 'undefined' && tableau.extensions) {
+  if (typeof tableau !== 'undefined' && tableau.extensions && tableau.extensions.initializeAsync) {
+    console.log('Calling tableau.extensions.initializeAsync()...');
+    
     tableau.extensions.initializeAsync().then(() => {
       state.isTableauEnvironment = true;
       state.dashboard = tableau.extensions.dashboardContent.dashboard;
       state.availableWorksheets = state.dashboard.worksheets || [];
 
-      console.log('Tableau Extension Initialized. Worksheets found:', state.availableWorksheets.map(w => w.name));
+      console.log('Connected to Tableau Dashboard:', state.dashboard.name);
+      console.log('Available Worksheets:', state.availableWorksheets.map(w => w.name));
 
       populateWorksheetDropdown();
       attachAllEventListeners();
       
-      // Trigger initial analysis
+      // Initial Insight Generation with real Tableau data
       triggerDataExtractionAndAnalysis();
 
     }).catch((err) => {
-      console.warn('Tableau extension initialization error:', err);
+      console.error('Tableau initializeAsync error:', err);
+      elements.modelInfoBadge.innerHTML = `<span style="color:#ef4444" title="${err.message || err}">Tableau SDK Error</span>`;
       setupBrowserPreviewMode();
     });
   } else {
-    console.warn('Tableau API object not found, loading preview mode.');
+    console.warn('Tableau API object not found, falling back to preview mode.');
     setupBrowserPreviewMode();
   }
 }
 
 /**
- * Fallback Browser Preview Mode (When tested outside Tableau Desktop)
+ * Fallback Browser Preview Mode (When tested in browser outside Tableau)
  */
 function setupBrowserPreviewMode() {
   state.isTableauEnvironment = false;
-  elements.worksheetSelect.innerHTML = `<option value="__ALL__">Semua Data Visual (Preview Mode)</option>`;
+  elements.worksheetSelect.innerHTML = `<option value="__ALL__">Preview Mode (Browser)</option>`;
   elements.modelInfoBadge.innerHTML = `<span style="color:#f59e0b">Preview Mode</span>`;
   elements.metaDataPoints.textContent = 'Demo Mode';
   elements.metaTimestamp.textContent = 'Ready';
   
   renderInsightMarkdown(`### Selamat Datang di Tableau AI Insight Extension 🚀
 
-Extension sedang berjalan dalam **Preview Mode** di browser.
+Extension sedang berjalan dalam **Preview Mode** di browser biasa.
 
-- Di dalam **Tableau Dashboard**, extension ini akan otomatis mendeteksi seluruh visual worksheet Anda (*Total Penumpang*, *Tren Bulanan*, *Jenis Moda*, dll.) dan menyajikan narasi insight yang ringkas dan akurat saat filter diubah.
+- Di dalam **Tableau Dashboard**, extension ini akan otomatis terhubung ke seluruh visual worksheet Anda (*Total Penumpang*, *Tren Bulanan*, *Jenis Moda*, dll.) dan membaca filter secara dinamis.
 - Klik tombol **Refresh (⟳)** untuk menguji panggilan AI dengan sampel data simulasi.`);
 }
 
@@ -231,7 +235,7 @@ function attachAllEventListeners() {
     }
   });
 
-  // Listen to Parameter changes on the Dashboard (if supported)
+  // Listen to Parameter changes on the Dashboard (if any)
   if (state.dashboard && state.dashboard.getParametersAsync) {
     state.dashboard.getParametersAsync().then(params => {
       params.forEach(param => {
@@ -252,7 +256,7 @@ function attachAllEventListeners() {
  */
 function onTableauFilterChanged() {
   clearTimeout(state.debounceTimer);
-  setLoadingState(true, 'Filter diperbarui, menganalisis data...');
+  setLoadingState(true, 'Filter berubah, memperbarui insight...');
 
   state.debounceTimer = setTimeout(() => {
     triggerDataExtractionAndAnalysis();
@@ -284,13 +288,9 @@ async function triggerDataExtractionAndAnalysis() {
           const summaryData = await ws.getSummaryDataAsync({ maxRows: 100 });
           const wsFilters = await ws.getFiltersAsync();
 
-          const columns = summaryData.columns.map(c => ({
-            fieldName: c.fieldName,
-            dataType: c.dataType
-          }));
-
+          const columns = summaryData.columns.map(c => c.fieldName);
           const rows = summaryData.data.map(r => {
-            return r.map(cell => cell.formattedValue || cell.value);
+            return r.map(cell => (cell.formattedValue !== undefined && cell.formattedValue !== null) ? cell.formattedValue : cell.value);
           });
 
           totalDataRows += rows.length;
@@ -308,7 +308,7 @@ async function triggerDataExtractionAndAnalysis() {
 
           combinedSheetsData.push({
             worksheetName: ws.name,
-            columns: columns.map(c => c.fieldName),
+            columns: columns,
             rows: rows
           });
         } catch (err) {
@@ -353,7 +353,9 @@ async function triggerDataExtractionAndAnalysis() {
     const now = new Date();
     elements.metaTimestamp.textContent = `Update: ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`;
     
-    if (result.meta?.model) {
+    if (state.isTableauEnvironment) {
+      elements.modelInfoBadge.innerHTML = `<span style="color:#10b981">● Live Tableau (${result.meta?.model || 'AI'})</span>`;
+    } else if (result.meta?.model) {
       elements.modelInfoBadge.innerHTML = `<span style="color:#10b981">● AI (${result.meta.model})</span>`;
     }
 
