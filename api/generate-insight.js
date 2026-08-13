@@ -3,7 +3,7 @@ import OpenAI from 'openai';
 
 /**
  * Serverless Handler for Tableau AI Insight Generation
- * Generates natural, crisp, zero-redundancy executive data narratives.
+ * Strictly focuses on currently filtered year/period with zero redundancy.
  */
 export default async function handler(req, res) {
   // 1. CORS Headers
@@ -33,7 +33,6 @@ export default async function handler(req, res) {
       totalRows = 0,
       appliedFilters = [],
       sheetsData = [],
-      // Backward compatibility for single sheet payload
       worksheetName,
       columns,
       rows
@@ -68,32 +67,33 @@ export default async function handler(req, res) {
 
     const filterText = appliedFilters.length > 0
       ? appliedFilters.map(f => `${f.fieldName}: ${f.appliedValues?.join(', ') || 'Semua'}`).join(' | ')
-      : 'Default / Semua filter';
+      : 'Semua Filter Aktif';
 
-    // 4. Construct Highly Direct, Natural Narrative Prompt
-    const systemPrompt = `Anda adalah Analis Data Senior. Tugas Anda adalah menghasilkan narasi teks INSIGHT yang sangat ringkas, padat, alami, dan langsung ke inti data visual Tableau.
+    // 4. Construct Highly Targeted System & User Prompt
+    const systemPrompt = `Anda adalah Analis Data Eksekutif. Tugas Anda adalah menulis narasi insight yang fokus HANYA pada tahun/periode yang SEDANG DIPILIH pada filter Tableau.
 
-ATURAN UTAMA PENULISAN:
-1. GAYA BAHASA:
-   - Tulis secara langsung, mengalir, lugas, dan profesional dalam Bahasa Indonesia.
-   - JANGAN gunakan kalimat pembuka basa-basi seperti "Berikut adalah analisis data...", "Berdasarkan data visual...", atau "Ringkasan Eksekutif".
-   - JANGAN membuat header/sub-header formal yang kaku jika bisa dirangkum dalam 1-2 paragraf narasi atau 2-3 poin ringkas.
-2. CAKUPAN DATA LENGKAP & TANPA PENGULANGAN (ZERO REDUNDANCY):
-   - Sebutkan periode waktu/tahun & batas bulan terkini yang tercatat.
-   - Sebutkan angka total/utama saat ini.
-   - Sebutkan tren/perbandingan tahun lalu (YoY) jika tersedia datanya.
-   - Sebutkan kontributor tertinggi/terendah (misal: jenis moda transportasi, kategori, atau wilayah) beserta proporsi/angkanya jika ada.
-   - Setiap angka dan fakta hanya disebutkan TEPAT SATU KALI tanpa pengulangan.
-3. FORMATTING:
-   - Gunakan format **bold** pada angka kunci, tahun, nama bulan, dan nama entitas penting (contoh: "Tahun **2026** sampai dengan bulan **Juni**, tercatat sebanyak **419.309.753 penumpang**...").`;
+PANDUAN KETAT:
+1. FOKUS HANYA PADA TAHUN / FILTER AKTIF:
+   - Jika filter menunjukkan tahun tertentu (contoh: Tahun 2024 atau 2026), ceritakan HANYA data dan kinerja untuk tahun tersebut.
+   - JANGAN menjabarkan atau menganalisis tahun-tahun lain yang tidak dipilih, KECUALI menyebutkan satu angka perbandingan pertumbuhan YoY dengan tahun sebelumnya (misal: "naik 22,53% dari tahun lalu").
+2. STRUKTUR NARASI RINGKAS (1-2 Paragraf Padat):
+   - Sebutkan Tahun & batas bulan data (misal: "Tahun **2024** penuh" atau "Tahun **2026** hingga bulan **Juni**").
+   - Sebutkan Total Angka / Metrik Utama pada tahun tersebut dan perbandingan pertumbuhannya (YoY) jika ada.
+   - Sebutkan tren bulanan (bulan dengan volume tertinggi/puncak dan terendah beserta angkanya).
+   - Sebutkan kontributor moda transportasi terbanyak/dominan (misal: Transjakarta, KRL, dsb.) beserta angkanya.
+3. TANPA BASA-BASI & BEBAS PENGULANGAN (ZERO REDUNDANCY):
+   - JANGAN ada kalimat pengantar seperti "Berikut analisis...", "Berdasarkan data...", dsb. Langsung ke fakta data!
+   - Setiap angka dan nama entitas hanya disebutkan TEPAT SATU KALI.
+   - Gunakan format **bold** untuk angka kunci, nama bulan, tahun, dan moda transportasi.`;
 
-    const userPrompt = `DASHBOARD: ${dashboardName}
-FILTER AKTIF: ${filterText}
+    const userPrompt = `### KONTEKS FILTER DASHBOARD:
+- Dashboard: ${dashboardName}
+- Filter Aktif: ${filterText}
 
-DATA VISUAL TERKINI DARI TABLEAU:
+### DATA VISUAL DARI WORKSHETS TABLEAU:
 ${formattedDataText}
 
-Tuliskan narasi insight ringkas, padat, dan langsung ke fakta utama berdasarkan data di atas:`;
+Tuliskan narasi insight yang fokus HANYA pada periode/tahun filter aktif di atas:`;
 
     // 5. Invoke LLM (Gemini or OpenAI)
     let insightResult = '';
@@ -113,7 +113,7 @@ Tuliskan narasi insight ringkas, padat, dan langsung ke fakta utama berdasarkan 
 
       insightResult = completion.choices[0]?.message?.content || '';
     } else {
-      // Default: Google Gemini (gemini-3.5-flash-lite / gemini-2.0-flash)
+      // Default: Google Gemini
       const modelName = process.env.AI_MODEL || 'gemini-3.5-flash-lite';
       const genAI = new GoogleGenerativeAI(apiKey);
       const model = genAI.getGenerativeModel({

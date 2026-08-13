@@ -12,7 +12,7 @@ const state = {
   filterUnregisterHandlers: [],
   debounceTimer: null,
   debounceDelayMs: 600,
-  isLoading: false,
+  activeAbortController: null,
   fontSize: 14,
   fontFamily: "'Inter', sans-serif",
   lastInsightText: '',
@@ -101,9 +101,7 @@ function setupEventListeners() {
 
   // Manual Refresh Button
   elements.btnRefresh.addEventListener('click', () => {
-    if (!state.isLoading) {
-      triggerDataExtractionAndAnalysis();
-    }
+    triggerDataExtractionAndAnalysis();
   });
 
   // Copy Insight Button
@@ -151,12 +149,12 @@ function initTableauExtension() {
       populateWorksheetDropdown();
       attachAllEventListeners();
       
-      // Initial Insight Generation with real Tableau data
+      // Trigger initial analysis with real Tableau data
       triggerDataExtractionAndAnalysis();
 
     }).catch((err) => {
       console.error('Tableau initializeAsync error:', err);
-      elements.modelInfoBadge.innerHTML = `<span style="color:#ef4444" title="${err.message || err}">Tableau SDK Error</span>`;
+      elements.modelInfoBadge.innerHTML = `<span style="color:#ef4444">Tableau Init Error</span>`;
       setupBrowserPreviewMode();
     });
   } else {
@@ -267,9 +265,14 @@ function onTableauFilterChanged() {
  * 7. Extract Data from Worksheet(s) & Call AI API
  */
 async function triggerDataExtractionAndAnalysis() {
-  if (state.isLoading) return;
+  // Abort any ongoing fetch request
+  if (state.activeAbortController) {
+    state.activeAbortController.abort();
+  }
+  state.activeAbortController = new AbortController();
+  const currentSignal = state.activeAbortController.signal;
 
-  setLoadingState(true);
+  setLoadingState(true, 'Mengambil data Tableau & memproses AI...');
 
   try {
     let payload = {};
@@ -335,7 +338,8 @@ async function triggerDataExtractionAndAnalysis() {
       headers: {
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify(payload)
+      body: JSON.stringify(payload),
+      signal: currentSignal
     });
 
     const result = await response.json();
@@ -362,6 +366,10 @@ async function triggerDataExtractionAndAnalysis() {
     setLoadingState(false);
 
   } catch (error) {
+    if (error.name === 'AbortError') {
+      console.log('Previous insight request aborted for new filter.');
+      return;
+    }
     console.error('Error generating insight:', error);
     showError(error.message || 'Gagal menghasilkan insight dari AI.');
   }
@@ -391,8 +399,6 @@ function renderInsightMarkdown(markdownText) {
  * 9. UI State Management
  */
 function setLoadingState(isLoading, customText) {
-  state.isLoading = isLoading;
-
   if (isLoading) {
     elements.statusDot.className = 'status-dot loading';
     elements.refreshIcon.classList.add('spin-anim');
@@ -409,7 +415,6 @@ function setLoadingState(isLoading, customText) {
 }
 
 function showError(message) {
-  state.isLoading = false;
   elements.statusDot.className = 'status-dot error';
   elements.refreshIcon.classList.remove('spin-anim');
   
@@ -433,38 +438,45 @@ function getDemoPayload() {
     targetMode: '__ALL__',
     totalRows: 12,
     appliedFilters: [
-      { fieldName: 'Tahun', appliedValues: ['2026'] }
+      { fieldName: 'Tahun', appliedValues: ['2024'] }
     ],
     sheetsData: [
       {
         worksheetName: 'total_penumpang',
         columns: ['Tahun', 'Total Penumpang', 'YoY Growth'],
         rows: [
-          ['2026', '419.309.753', '-50.02%']
+          ['2024', '760.761.793', '+22.53%']
         ]
       },
       {
         worksheetName: 'Jumlah Penumpang Berdasarkan Bulan',
         columns: ['Bulan', 'Jumlah Penumpang'],
         rows: [
-          ['Januari', '70.725.335'],
-          ['Februari', '65.286.339'],
-          ['Maret', '66.289.325'],
-          ['April', '73.790.669'],
-          ['Mei', '69.702.257'],
-          ['Juni', '73.515.828']
+          ['Januari', '62.286.524'],
+          ['Februari', '57.080.098'],
+          ['Maret', '59.884.688'],
+          ['April', '55.902.441'],
+          ['Mei', '63.550.890'],
+          ['Juni', '62.566.823'],
+          ['Juli', '69.677.569'],
+          ['Agustus', '66.486.098'],
+          ['September', '64.824.228'],
+          ['Oktober', '70.766.388'],
+          ['November', '64.441.218'],
+          ['Desember', '63.294.638']
         ]
       },
       {
         worksheetName: 'Jumlah Penumpang Berdasarkan Jenis Moda',
         columns: ['Jenis Moda', 'Jumlah Penumpang'],
         rows: [
-          ['Transjakarta', '211.458.775'],
-          ['KRL', '177.625.912'],
-          ['MRT', '23.279.501'],
-          ['Bus Sekolah', '4.475.965'],
-          ['KCI Commuter Bandara', '1.175.770'],
-          ['LRT', '705.835']
+          ['Transjakarta', '382.073.717'],
+          ['KRL', '325.243.803'],
+          ['MRT', '40.010.400'],
+          ['Bus Sekolah', '8.808.034'],
+          ['KCI Commuter Bandara', '2.225.159'],
+          ['LRT', '1.212.984'],
+          ['Kapal', '1.187.696']
         ]
       }
     ]
