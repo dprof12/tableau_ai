@@ -7,12 +7,6 @@
     <author name="BI Data Analytics Team" email="support@analytics.local" organization="Organization" website="https://vercel.com"/>
     <min-api-version>1.0</min-api-version>
     
-    <!-- 
-      URL ENDPOINT:
-      Ganti URL di bawah dengan URL domain deployment Vercel Anda setelah di-deploy.
-      Contoh: https://tableau-ai-insight.vercel.app/ui.html
-      Untuk pengujian lokal: https://localhost:3000/ui.html atau URL tunnel HTTPS.
-    -->
     <source-location>
       <url>https://tableau-ai.vercel.app/ui.html</url>
     </source-location>
@@ -21,10 +15,6 @@
     <permissions>
       <permission>full data</permission>
     </permissions>
-    
-    <context-menu>
-      <configure-context-menu-item />
-    </context-menu>
   </dashboard-extension>
   <resources>
     <resource id="name">
