@@ -1,16 +1,17 @@
 /**
  * Tableau AI Insight Extension - Frontend Application Logic
- * Integrates Tableau Extensions SDK, Auto-Refresh on Filter Changed, Font Customization, and AI API Proxy.
+ * Integrates Tableau Extensions SDK, Multi/Single Worksheet Data Extraction,
+ * Auto-Refresh on Filter/Parameter Changed, Font Customization, and AI Proxy.
  */
 
 // Application State
 const state = {
   dashboard: null,
-  activeWorksheet: null,
+  activeWorksheetName: '__ALL__', // '__ALL__' or specific worksheet name
   availableWorksheets: [],
-  unregisterFilterListener: null,
+  filterUnregisterHandlers: [],
   debounceTimer: null,
-  debounceDelayMs: 900,
+  debounceDelayMs: 800,
   isLoading: false,
   fontSize: 14,
   fontFamily: "'Inter', sans-serif",
@@ -127,11 +128,8 @@ function setupEventListeners() {
 
   // Worksheet Selection Change
   elements.worksheetSelect.addEventListener('change', (e) => {
-    const selectedSheetName = e.target.value;
-    const targetSheet = state.availableWorksheets.find(ws => ws.name === selectedSheetName);
-    if (targetSheet) {
-      setActiveWorksheet(targetSheet);
-    }
+    state.activeWorksheetName = e.target.value;
+    triggerDataExtractionAndAnalysis();
   });
 }
 
@@ -143,24 +141,22 @@ function initTableauExtension() {
     tableau.extensions.initializeAsync().then(() => {
       state.isTableauEnvironment = true;
       state.dashboard = tableau.extensions.dashboardContent.dashboard;
-      state.availableWorksheets = state.dashboard.worksheets;
+      state.availableWorksheets = state.dashboard.worksheets || [];
+
+      console.log('Tableau Extension Initialized. Worksheets found:', state.availableWorksheets.map(w => w.name));
 
       populateWorksheetDropdown();
+      attachAllEventListeners();
+      
+      // Trigger initial analysis
+      triggerDataExtractionAndAnalysis();
 
-      // Default to first worksheet or "Chart Tren" if exists
-      const preferredSheet = state.availableWorksheets.find(ws => ws.name.toLowerCase().includes('tren')) 
-        || state.availableWorksheets[0];
-
-      if (preferredSheet) {
-        setActiveWorksheet(preferredSheet);
-      } else {
-        showError('Tidak ditemukan worksheet aktif di dashboard Tableau ini.');
-      }
     }).catch((err) => {
       console.warn('Tableau extension initialization error:', err);
       setupBrowserPreviewMode();
     });
   } else {
+    console.warn('Tableau API object not found, loading preview mode.');
     setupBrowserPreviewMode();
   }
 }
@@ -170,21 +166,17 @@ function initTableauExtension() {
  */
 function setupBrowserPreviewMode() {
   state.isTableauEnvironment = false;
-  elements.worksheetSelect.innerHTML = `<option value="demo">Demo Worksheet (Browser Mode)</option>`;
+  elements.worksheetSelect.innerHTML = `<option value="__ALL__">Semua Data Visual (Preview Mode)</option>`;
   elements.modelInfoBadge.innerHTML = `<span style="color:#f59e0b">Preview Mode</span>`;
-  elements.metaDataPoints.textContent = 'Mock Dataset';
+  elements.metaDataPoints.textContent = 'Demo Mode';
   elements.metaTimestamp.textContent = 'Ready';
   
-  // Show welcome guidance
   renderInsightMarkdown(`### Selamat Datang di Tableau AI Insight Extension 🚀
 
-Extension ini siap membaca data visual dari **Tableau Dashboard** secara otomatis saat filter diubah.
+Extension sedang berjalan dalam **Preview Mode** di browser.
 
-- **Status**: Berjalan dalam mode browser preview.
-- **Vercel API Endpoint**: \`/api/generate-insight\`
-- **Fitur**: Auto-refresh filter listener, Zero-redundancy narrative, & Font Customizer.
-
-*Klik tombol **Refresh (⟳)** di atas untuk menguji panggilan AI dengan sampel data simulasi.*`);
+- Di dalam **Tableau Dashboard**, extension ini akan otomatis mendeteksi seluruh visual worksheet Anda (*Total Penumpang*, *Tren Bulanan*, *Jenis Moda*, dll.) dan menyajikan narasi insight yang ringkas dan akurat saat filter diubah.
+- Klik tombol **Refresh (⟳)** untuk menguji panggilan AI dengan sampel data simulasi.`);
 }
 
 /**
@@ -192,50 +184,75 @@ Extension ini siap membaca data visual dari **Tableau Dashboard** secara otomati
  */
 function populateWorksheetDropdown() {
   elements.worksheetSelect.innerHTML = '';
+
+  // Option 1: All Worksheets Combined (Recommended default)
+  const allOption = document.createElement('option');
+  allOption.value = '__ALL__';
+  allOption.textContent = '📊 Semua Visual (Gabungan)';
+  elements.worksheetSelect.appendChild(allOption);
+
+  // Option 2...N: Individual Worksheets
   state.availableWorksheets.forEach(ws => {
     const option = document.createElement('option');
     option.value = ws.name;
     option.textContent = ws.name;
     elements.worksheetSelect.appendChild(option);
   });
+
+  state.activeWorksheetName = '__ALL__';
 }
 
 /**
- * 5. Set Active Worksheet & Attach Filter Listeners
+ * 5. Attach Filter & Parameter Listeners Across All Worksheets
  */
-function setActiveWorksheet(worksheet) {
-  state.activeWorksheet = worksheet;
-  elements.worksheetSelect.value = worksheet.name;
+function attachAllEventListeners() {
+  // Clear any existing handlers
+  state.filterUnregisterHandlers.forEach(unregister => {
+    try { unregister(); } catch (e) {}
+  });
+  state.filterUnregisterHandlers = [];
 
-  // Unregister previous filter listener if exists
-  if (state.unregisterFilterListener) {
-    state.unregisterFilterListener();
-    state.unregisterFilterListener = null;
+  // Listen to Filter & Selection changes on ALL worksheets
+  state.availableWorksheets.forEach(ws => {
+    try {
+      const unregFilter = ws.addEventListener(
+        tableau.TableauEventType.FilterChanged,
+        onTableauFilterChanged
+      );
+      state.filterUnregisterHandlers.push(unregFilter);
+
+      const unregSelection = ws.addEventListener(
+        tableau.TableauEventType.MarkSelectionChanged,
+        onTableauFilterChanged
+      );
+      state.filterUnregisterHandlers.push(unregSelection);
+    } catch (e) {
+      console.warn('Failed to attach listener on worksheet:', ws.name, e);
+    }
+  });
+
+  // Listen to Parameter changes on the Dashboard (if supported)
+  if (state.dashboard && state.dashboard.getParametersAsync) {
+    state.dashboard.getParametersAsync().then(params => {
+      params.forEach(param => {
+        try {
+          const unregParam = param.addEventListener(
+            tableau.TableauEventType.ParameterChanged,
+            onTableauFilterChanged
+          );
+          state.filterUnregisterHandlers.push(unregParam);
+        } catch (e) {}
+      });
+    }).catch(() => {});
   }
-
-  // Register Filter & Selection Event Listeners with Debounce
-  if (worksheet.addEventListener) {
-    state.unregisterFilterListener = worksheet.addEventListener(
-      tableau.TableauEventType.FilterChanged,
-      onTableauFilterChanged
-    );
-
-    worksheet.addEventListener(
-      tableau.TableauEventType.MarkSelectionChanged,
-      onTableauFilterChanged
-    );
-  }
-
-  // Trigger initial insight analysis
-  triggerDataExtractionAndAnalysis();
 }
 
 /**
- * 6. Debounced Filter Changed Handler
+ * 6. Debounced Filter/Parameter Changed Handler
  */
 function onTableauFilterChanged() {
   clearTimeout(state.debounceTimer);
-  setLoadingState(true, 'Filter berubah, menunggu input selesai...');
+  setLoadingState(true, 'Filter diperbarui, menganalisis data...');
 
   state.debounceTimer = setTimeout(() => {
     triggerDataExtractionAndAnalysis();
@@ -243,7 +260,7 @@ function onTableauFilterChanged() {
 }
 
 /**
- * 7. Extract Data from Worksheet & Call AI API
+ * 7. Extract Data from Worksheet(s) & Call AI API
  */
 async function triggerDataExtractionAndAnalysis() {
   if (state.isLoading) return;
@@ -253,33 +270,58 @@ async function triggerDataExtractionAndAnalysis() {
   try {
     let payload = {};
 
-    if (state.isTableauEnvironment && state.activeWorksheet) {
-      // 1. Fetch Summary Data from Tableau Worksheet
-      const dataTable = await state.activeWorksheet.getSummaryDataAsync({ maxRows: 300 });
-      const filters = await state.activeWorksheet.getFiltersAsync();
+    if (state.isTableauEnvironment && state.dashboard) {
+      const sheetsToRead = state.activeWorksheetName === '__ALL__'
+        ? state.availableWorksheets
+        : state.availableWorksheets.filter(ws => ws.name === state.activeWorksheetName);
 
-      // 2. Format Columns & Rows
-      const columns = dataTable.columns.map(col => ({
-        fieldName: col.fieldName,
-        dataType: col.dataType
-      }));
+      const combinedSheetsData = [];
+      let totalDataRows = 0;
+      const allAppliedFilters = [];
 
-      const rows = dataTable.data.map(row => {
-        return row.map(cell => cell.formattedValue || cell.value);
-      });
+      for (const ws of sheetsToRead) {
+        try {
+          const summaryData = await ws.getSummaryDataAsync({ maxRows: 100 });
+          const wsFilters = await ws.getFiltersAsync();
 
-      const appliedFilters = filters.map(f => ({
-        fieldName: f.fieldName,
-        appliedValues: f.appliedValues?.map(v => v.formattedValue || v.value) || []
-      }));
+          const columns = summaryData.columns.map(c => ({
+            fieldName: c.fieldName,
+            dataType: c.dataType
+          }));
+
+          const rows = summaryData.data.map(r => {
+            return r.map(cell => cell.formattedValue || cell.value);
+          });
+
+          totalDataRows += rows.length;
+
+          wsFilters.forEach(f => {
+            if (f.appliedValues && f.appliedValues.length > 0) {
+              const filterValues = f.appliedValues.map(v => v.formattedValue || v.value);
+              allAppliedFilters.push({
+                worksheet: ws.name,
+                fieldName: f.fieldName,
+                appliedValues: filterValues
+              });
+            }
+          });
+
+          combinedSheetsData.push({
+            worksheetName: ws.name,
+            columns: columns.map(c => c.fieldName),
+            rows: rows
+          });
+        } catch (err) {
+          console.warn(`Could not read data from worksheet ${ws.name}:`, err);
+        }
+      }
 
       payload = {
-        dashboardName: state.dashboard ? state.dashboard.name : 'Dashboard Tableau',
-        worksheetName: state.activeWorksheet.name,
-        totalRows: dataTable.totalRowCount || rows.length,
-        columns,
-        rows,
-        appliedFilters
+        dashboardName: state.dashboard.name || 'Dashboard Tableau',
+        targetMode: state.activeWorksheetName,
+        totalRows: totalDataRows,
+        appliedFilters: allAppliedFilters,
+        sheetsData: combinedSheetsData
       };
 
     } else {
@@ -287,7 +329,7 @@ async function triggerDataExtractionAndAnalysis() {
       payload = getDemoPayload();
     }
 
-    // 3. Send to Serverless API Endpoint
+    // Send POST to Serverless API Endpoint
     const response = await fetch('/api/generate-insight', {
       method: 'POST',
       headers: {
@@ -302,12 +344,12 @@ async function triggerDataExtractionAndAnalysis() {
       throw new Error(result.error || `Server error: ${response.status}`);
     }
 
-    // 4. Render Narrative Insight Result
+    // Render Narrative Insight Result
     state.lastInsightText = result.insight;
     renderInsightMarkdown(result.insight);
 
-    // 5. Update Metadata Footer
-    elements.metaDataPoints.textContent = `${payload.totalRows || payload.rows.length} Data Points`;
+    // Update Metadata Footer
+    elements.metaDataPoints.textContent = `${payload.totalRows || 0} Data Points`;
     const now = new Date();
     elements.metaTimestamp.textContent = `Update: ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`;
     
@@ -333,7 +375,13 @@ function renderInsightMarkdown(markdownText) {
   if (typeof marked !== 'undefined' && marked.parse) {
     elements.insightView.innerHTML = marked.parse(markdownText);
   } else {
-    elements.insightView.textContent = markdownText;
+    // Basic fallback formatter
+    const html = markdownText
+      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*(.*?)\*/g, '<em>$1</em>')
+      .replace(/\n\n/g, '<p></p>')
+      .replace(/\n/g, '<br>');
+    elements.insightView.innerHTML = html;
   }
 }
 
@@ -379,27 +427,44 @@ function hideAllViews() {
  */
 function getDemoPayload() {
   return {
-    dashboardName: 'Executive Performance Dashboard',
-    worksheetName: 'Tren & Distribusi Wilayah',
-    totalRows: 6,
-    columns: [
-      { fieldName: 'Tahun', dataType: 'string' },
-      { fieldName: 'Wilayah', dataType: 'string' },
-      { fieldName: 'Kategori', dataType: 'string' },
-      { fieldName: 'Nilai Realisasi (Juta)', dataType: 'float' },
-      { fieldName: 'Target (Juta)', dataType: 'float' }
-    ],
-    rows: [
-      ['2026', 'Jakarta Pusat', 'Layanan Publik', '4,850', '4,500'],
-      ['2026', 'Jakarta Selatan', 'Layanan Publik', '5,320', '5,000'],
-      ['2026', 'Jakarta Timur', 'Infrastruktur', '3,920', '4,100'],
-      ['2025', 'Jakarta Pusat', 'Layanan Publik', '4,200', '4,000'],
-      ['2025', 'Jakarta Selatan', 'Layanan Publik', '4,800', '4,600'],
-      ['2025', 'Jakarta Timur', 'Infrastruktur', '3,650', '3,800']
-    ],
+    dashboardName: 'Jumlah Penumpang Angkutan Umum yang Terlayani',
+    targetMode: '__ALL__',
+    totalRows: 12,
     appliedFilters: [
-      { fieldName: 'Status', appliedValues: ['Aktif'] },
-      { fieldName: 'Tahun', appliedValues: ['2025', '2026'] }
+      { fieldName: 'Tahun', appliedValues: ['2026'] }
+    ],
+    sheetsData: [
+      {
+        worksheetName: 'total_penumpang',
+        columns: ['Tahun', 'Total Penumpang', 'YoY Growth'],
+        rows: [
+          ['2026', '419.309.753', '-50.02%']
+        ]
+      },
+      {
+        worksheetName: 'Jumlah Penumpang Berdasarkan Bulan',
+        columns: ['Bulan', 'Jumlah Penumpang'],
+        rows: [
+          ['Januari', '70.725.335'],
+          ['Februari', '65.286.339'],
+          ['Maret', '66.289.325'],
+          ['April', '73.790.669'],
+          ['Mei', '69.702.257'],
+          ['Juni', '73.515.828']
+        ]
+      },
+      {
+        worksheetName: 'Jumlah Penumpang Berdasarkan Jenis Moda',
+        columns: ['Jenis Moda', 'Jumlah Penumpang'],
+        rows: [
+          ['Transjakarta', '211.458.775'],
+          ['KRL', '177.625.912'],
+          ['MRT', '23.279.501'],
+          ['Bus Sekolah', '4.475.965'],
+          ['KCI Commuter Bandara', '1.175.770'],
+          ['LRT', '705.835']
+        ]
+      }
     ]
   };
 }

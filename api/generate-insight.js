@@ -3,10 +3,10 @@ import OpenAI from 'openai';
 
 /**
  * Serverless Handler for Tableau AI Insight Generation
- * Supports Gemini & OpenAI with comprehensive zero-redundancy prompt engineering.
+ * Generates natural, crisp, zero-redundancy executive data narratives.
  */
 export default async function handler(req, res) {
-  // 1. Handle CORS Preflight Request
+  // 1. CORS Headers
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
@@ -22,26 +22,22 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({
       success: false,
-      error: 'Method Not Allowed. Please send a POST request with Tableau data.'
+      error: 'Method Not Allowed. Please send a POST request.'
     });
   }
 
   try {
     const {
-      worksheetName = 'Active Worksheet',
-      dashboardName = 'Dashboard',
+      dashboardName = 'Dashboard Tableau',
+      targetMode = '__ALL__',
+      totalRows = 0,
       appliedFilters = [],
-      columns = [],
-      rows = [],
-      totalRows = 0
+      sheetsData = [],
+      // Backward compatibility for single sheet payload
+      worksheetName,
+      columns,
+      rows
     } = req.body || {};
-
-    if (!rows || rows.length === 0) {
-      return res.status(400).json({
-        success: false,
-        error: 'Data visual kosong atau tidak ada data yang terpilih dari worksheet Tableau.'
-      });
-    }
 
     // 2. Read Environment Variables
     const provider = (process.env.AI_PROVIDER || 'gemini').toLowerCase().trim();
@@ -50,50 +46,56 @@ export default async function handler(req, res) {
     if (!apiKey) {
       return res.status(500).json({
         success: false,
-        error: 'AI_API_KEY belum dikonfigurasi pada Environment Variables Vercel/Server.'
+        error: 'AI_API_KEY belum dikonfigurasi di Environment Variables Vercel.'
       });
     }
 
-    // 3. Build Compressed Representation of the Tableau Data (Optimized for Tokens)
-    const formattedDataText = buildDataRepresentation(columns, rows);
-    const filterContext = appliedFilters.length > 0
-      ? appliedFilters.map(f => `${f.fieldName}: ${f.appliedValues?.join(', ') || 'All'}`).join(' | ')
-      : 'Semua filter aktif / Default';
+    // 3. Format Data Representation from Single or Multi-Worksheets
+    let formattedDataText = '';
+    
+    if (sheetsData && sheetsData.length > 0) {
+      formattedDataText = sheetsData.map(sheet => {
+        return `#### Visual Worksheet: ${sheet.worksheetName}\n` + buildTable(sheet.columns, sheet.rows);
+      }).join('\n\n');
+    } else if (columns && rows) {
+      formattedDataText = `#### Visual Worksheet: ${worksheetName || 'Active'}\n` + buildTable(columns, rows);
+    } else {
+      return res.status(400).json({
+        success: false,
+        error: 'Tidak ada data visual yang diterima dari Tableau.'
+      });
+    }
 
-    // 4. Construct Strict System & User Prompt
-    const systemPrompt = `Anda adalah Analis Data Senior dan Konsultan Eksekutif BI.
-Tugas Anda adalah menganalisis data visual terstruktur dari Tableau Dashboard berikut dan menyusun narasi insight eksekutif yang tajam, komprehensif, dan bebas pengulangan.
+    const filterText = appliedFilters.length > 0
+      ? appliedFilters.map(f => `${f.fieldName}: ${f.appliedValues?.join(', ') || 'Semua'}`).join(' | ')
+      : 'Default / Semua filter';
 
-PANDUAN ANALISIS KETAT:
-1. CAKUPAN MENYELURUH (FULL COVERAGE):
-   - Wajib menganalisis dan mencakup seluruh variabel, dimensi, dan metrik yang ada dalam data (nilai metrik utama, dimensi waktu, spasial/wilayah, kategori/jenis, dan variabel relevan lainnya).
-   - Jangan mengabaikan dimensi atau data point yang ada.
-2. BEBAS PENGULANGAN (ZERO REDUNDANCY):
-   - Jangan mengulang angka, persentase, atau kesimpulan yang sama di kalimat berbeda.
-   - Setiap angka atau fakta hanya disebutkan satu kali dalam konteks analisis yang paling tepat.
-3. STRUKTUR NARASI EKSEKUTIF:
-   - Nilai Realisasi Saat Ini: Sebutkan angka metrik utama saat ini sesuai filter yang aktif secara akurat.
-   - Perbandingan Temporal (YoY / Periode Lalu): Tunjukkan tren pertumbuhan atau penurunan jika data memuat variabel waktu/tahun.
-   - Perbandingan Wilayah / Spasial: Identifikasi variasi antar wilayah (wilayah tertinggi, terendah, kesenjangan) jika data memuat variabel geografis.
-   - Perbandingan Jenis / Kategori: Tunjukkan komposisi, kontributor terbesar/terkecil jika data memuat dimensi klasifikasi.
-   - Catatan Pola / Anomali: Sorot pola penting atau temuan tak terduga yang terlihat dari keseluruhan data.
-4. GAYA PENULISAN:
-   - Gunakan format teks Markdown yang rapi (gunakan bolding untuk angka/istilah kunci dan bullet points yang elegan).
-   - Lugas, langsung ke inti data, objektif, tanpa kalimat basa-basi pembuka atau penutup bertele-tele.
-   - Bahasa: Bahasa Indonesia profesional.`;
+    // 4. Construct Highly Direct, Natural Narrative Prompt
+    const systemPrompt = `Anda adalah Analis Data Senior. Tugas Anda adalah menghasilkan narasi teks INSIGHT yang sangat ringkas, padat, alami, dan langsung ke inti data visual Tableau.
 
-    const userPrompt = `### KONTEKS TABLEAU:
-- Dashboard: ${dashboardName}
-- Worksheet Target: ${worksheetName}
-- Filter yang Diterapkan: ${filterContext}
-- Total Data Point: ${totalRows} baris
+ATURAN UTAMA PENULISAN:
+1. GAYA BAHASA:
+   - Tulis secara langsung, mengalir, lugas, dan profesional dalam Bahasa Indonesia.
+   - JANGAN gunakan kalimat pembuka basa-basi seperti "Berikut adalah analisis data...", "Berdasarkan data visual...", atau "Ringkasan Eksekutif".
+   - JANGAN membuat header/sub-header formal yang kaku jika bisa dirangkum dalam 1-2 paragraf narasi atau 2-3 poin ringkas.
+2. CAKUPAN DATA LENGKAP & TANPA PENGULANGAN (ZERO REDUNDANCY):
+   - Sebutkan periode waktu/tahun & batas bulan terkini yang tercatat.
+   - Sebutkan angka total/utama saat ini.
+   - Sebutkan tren/perbandingan tahun lalu (YoY) jika tersedia datanya.
+   - Sebutkan kontributor tertinggi/terendah (misal: jenis moda transportasi, kategori, atau wilayah) beserta proporsi/angkanya jika ada.
+   - Setiap angka dan fakta hanya disebutkan TEPAT SATU KALI tanpa pengulangan.
+3. FORMATTING:
+   - Gunakan format **bold** pada angka kunci, tahun, nama bulan, dan nama entitas penting (contoh: "Tahun **2026** sampai dengan bulan **Juni**, tercatat sebanyak **419.309.753 penumpang**...").`;
 
-### DATA TABULAR TABLEAU:
+    const userPrompt = `DASHBOARD: ${dashboardName}
+FILTER AKTIF: ${filterText}
+
+DATA VISUAL TERKINI DARI TABLEAU:
 ${formattedDataText}
 
-Silakan susun narasi insight eksekutif yang mencakup seluruh data di atas secara utuh dan tanpa pengulangan sesuai panduan.`;
+Tuliskan narasi insight ringkas, padat, dan langsung ke fakta utama berdasarkan data di atas:`;
 
-    // 5. Invoke LLM based on configured provider
+    // 5. Invoke LLM (Gemini or OpenAI)
     let insightResult = '';
 
     if (provider === 'openai') {
@@ -111,7 +113,7 @@ Silakan susun narasi insight eksekutif yang mencakup seluruh data di atas secara
 
       insightResult = completion.choices[0]?.message?.content || '';
     } else {
-      // Default: Google Gemini
+      // Default: Google Gemini (gemini-3.5-flash-lite / gemini-2.0-flash)
       const modelName = process.env.AI_MODEL || 'gemini-3.5-flash-lite';
       const genAI = new GoogleGenerativeAI(apiKey);
       const model = genAI.getGenerativeModel({
@@ -132,41 +134,37 @@ Silakan susun narasi insight eksekutif yang mencakup seluruh data di atas secara
 
     return res.status(200).json({
       success: true,
-      insight: insightResult,
+      insight: insightResult.trim(),
       meta: {
         provider,
         model: process.env.AI_MODEL || (provider === 'openai' ? 'gpt-4o-mini' : 'gemini-3.5-flash-lite'),
-        worksheetName,
         dataPointsCount: totalRows,
         timestamp: new Date().toISOString()
       }
     });
 
   } catch (error) {
-    console.error('Error generating insight:', error);
+    console.error('Error in generate-insight handler:', error);
     return res.status(500).json({
       success: false,
-      error: error.message || 'Terjadi kesalahan saat memproses data ke AI.',
-      detail: error.toString()
+      error: error.message || 'Terjadi kesalahan pada backend proxy AI.'
     });
   }
 }
 
 /**
- * Converts columns array and rows array into a compact, token-efficient Markdown table.
+ * Builds compact Markdown Table from columns and rows
  */
-function buildDataRepresentation(columns, rows) {
+function buildTable(columns, rows) {
   if (!columns || columns.length === 0 || !rows || rows.length === 0) {
-    return 'Tidak ada data.';
+    return '*(Tidak ada data)*';
   }
 
-  // Limit max rows to 300 to avoid token limits while keeping full context
-  const maxRows = Math.min(rows.length, 300);
-  const headers = columns.map(c => (typeof c === 'string' ? c : c.fieldName || c.name || 'Column'));
-
+  const headers = columns.map(c => (typeof c === 'string' ? c : c.fieldName || c.name || 'Kolom'));
   let table = `| ${headers.join(' | ')} |\n`;
   table += `| ${headers.map(() => '---').join(' | ')} |\n`;
 
+  const maxRows = Math.min(rows.length, 100);
   for (let i = 0; i < maxRows; i++) {
     const row = rows[i];
     const rowValues = Array.isArray(row)
@@ -174,10 +172,6 @@ function buildDataRepresentation(columns, rows) {
       : headers.map(h => (row[h] !== null && row[h] !== undefined ? String(row[h]).replace(/\|/g, '/') : '-'));
 
     table += `| ${rowValues.join(' | ')} |\n`;
-  }
-
-  if (rows.length > maxRows) {
-    table += `\n*(Menampilkan ${maxRows} dari ${rows.length} total baris data yang teragregasi)*\n`;
   }
 
   return table;
