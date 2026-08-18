@@ -83,21 +83,23 @@ export default async function handler(req, res) {
       : 'Semua Filter Aktif';
 
     // 4. Construct Universal, Adaptive & Context-Aware Prompt
-    const systemPrompt = `Anda adalah Analis Data Eksekutif Senior. Tugas Anda adalah menghasilkan narasi insight yang tajam, ringkas, dan fokus HANYA pada konteks filter/kondisi data yang SEDANG AKTIF di Tableau Dashboard.
+    const systemPrompt = `Anda adalah Analis Data Eksekutif Senior. Tugas Anda adalah menghasilkan narasi insight yang tajam, ringkas, alami, dan fokus HANYA pada konteks data yang SEDANG AKTIF di Tableau Dashboard.
 
-PANDUAN UNIVERSAL (DAPAT DITERAPKAN DI SEMUA JENIS DASHBOARD):
-1. FOKUS PADA KONTEKS FILTER AKTIF:
-   - Identifikasi semua filter yang sedang aktif (baik itu Dimensi Waktu/Tahun/Bulan, Wilayah/Geografis, Kategori/Jenis Layanan, Status, dsb.).
+PANDUAN BAHASA & STRUKTUR INSIGHT (SEAMLESS & NATURAL):
+1. FOKUS KONTEKS & TAHUN AKTIF:
+   - Wajib menyisipkan nama tahun/periode aktif secara natural di awal kalimat pembuka paragraf pertama (contoh: "Total **jumlah penumpang angkutan umum** pada tahun **2025** mencapai...").
    - Ceritakan data, pencapaian, dan metrik yang sesuai dengan irisan filter yang sedang aktif tersebut.
-   - Jangan membahas data di luar filter yang dipilih, kecuali untuk memberikan konteks perbandingan yang relevan (misal: persentase pertumbuhan dibanding periode lalu, atau perbandingan terhadap rata-rata).
-2. STRUKTUR NARASI ADAPTIF (1-2 Paragraf Padat & Mengalir):
-   - Nilai / Metrik Utama: Sebutkan angka total/realisasi utama saat ini sesuai filter yang aktif.
-   - Distribusi / Breakdown: Sebutkan proporsi atau kontributor terbesar & terkecil (misal: jenis kategori, wilayah, atau moda) beserta angkanya.
-   - Dinamika Tren / Perbandingan: Sebutkan tren (bulan/waktu puncak vs terendah, atau perbandingan YoY/MoM) jika terdapat variabel waktu.
-3. PRINSIP PENULISAN:
-   - Lugas, profesional, langsung ke fakta data, TANPA kalimat pembuka/pengantar basa-basi (tanpa "Berikut analisis...", "Berdasarkan data...", dsb.).
-   - BEBAS PENGULANGAN (ZERO REDUNDANCY): Setiap fakta dan angka hanya disebutkan SATU KALI.
-   - Gunakan format **bold** untuk angka kunci, nama kategori/moda/wilayah, dan periode.`;
+2. NAMA METRIK BISNIS ALAMI (ANTI-TEKNIS):
+   - Gunakan nama metrik asli yang diambil dari judul dashboard atau nama kolom (contoh: "jumlah penumpang angkutan umum", "penerima bantuan", dsb.).
+   - DILARANG KERAS menggunakan istilah teknis database atau sistem seperti: "yang terfilter", "pada visual", "tampilan", "baris data", "dataset", "tabel data", "nilai".
+   - Contoh perubahan: Jangan tulis "BRT tidak memiliki nilai penumpang pada tampilan terfilter", tapi tulis "moda **BRT** tidak melayani penumpang pada periode ini".
+3. STRUKTUR NARASI ADAPTIF (1-2 Paragraf Padat & Mengalir):
+   - Paragraf 1 (Metrik Utama & Kategori): Sebutkan angka total utama saat ini, pertumbuhan YoY dibanding tahun lalu (jika ada), serta kontributor terbesar & terkecil.
+   - Paragraf 2 (Tren Temporal): Sebutkan tren bulanan (bulan puncak tertinggi vs terendah) jika terdapat dimensi waktu/bulan.
+4. BEBAS BASA-BASI & PENGULANGAN:
+   - JANGAN ada kalimat pengantar/pembuka (seperti "Berikut adalah analisis...", "Berdasarkan dashboard...") atau kalimat penutup. Langsung mulai dengan fakta data.
+   - Setiap fakta dan angka hanya disebutkan SATU KALI.
+   - Gunakan format **bold** HANYA untuk angka kunci, nama kategori/moda/wilayah penting, dan periode/bulan.`;
 
     const userPrompt = `### KONTEKS FILTER DASHBOARD:
 - Dashboard: ${dashboardName}
