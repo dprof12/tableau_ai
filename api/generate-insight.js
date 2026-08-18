@@ -42,18 +42,29 @@ export default async function handler(req, res) {
 
     // 2. Read Environment Variables
     const provider = (process.env.AI_PROVIDER || 'gemini').toLowerCase().trim();
-    const apiKey = process.env.AI_API_KEY || process.env.GEMINI_API_KEY || process.env.OPENAI_API_KEY;
+    
+    // Ambil API Key berdasarkan provider untuk menghindari bentrokan
+    let apiKey = process.env.AI_API_KEY;
+    if (!apiKey) {
+      if (provider === 'openrouter') {
+        apiKey = process.env.OPENROUTER_API_KEY;
+      } else if (provider === 'openai') {
+        apiKey = process.env.OPENAI_API_KEY;
+      } else {
+        apiKey = process.env.GEMINI_API_KEY;
+      }
+    }
 
     if (!apiKey) {
       return res.status(500).json({
         success: false,
-        error: 'AI_API_KEY belum dikonfigurasi di Environment Variables Vercel.'
+        error: `API Key untuk provider '${provider}' belum dikonfigurasi di Environment Variables Vercel.`
       });
     }
 
     // 3. Format Data Representation from Single or Multi-Worksheets
     let formattedDataText = '';
-    
+
     if (sheetsData && sheetsData.length > 0) {
       formattedDataText = sheetsData.map(sheet => {
         return `#### Visual Worksheet: ${sheet.worksheetName}\n` + buildTable(sheet.columns, sheet.rows);
@@ -97,10 +108,31 @@ ${formattedDataText}
 
 Tuliskan narasi insight eksekutif yang fokus pada data terfilter di atas:`;
 
-    // 5. Invoke LLM (Gemini or OpenAI)
+    // 5. Invoke LLM (OpenRouter, OpenAI, or Gemini)
     let insightResult = '';
 
-    if (provider === 'openai') {
+    if (provider === 'openrouter') {
+      const modelName = process.env.AI_MODEL || 'google/gemini-2.5-flash';
+      const openai = new OpenAI({
+        apiKey: apiKey,
+        baseURL: 'https://openrouter.ai/api/v1',
+        defaultHeaders: {
+          'HTTP-Referer': 'https://tableau-ai.vercel.app',
+          'X-Title': 'Tableau AI Insight'
+        }
+      });
+
+      const completion = await openai.chat.completions.create({
+        model: modelName,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt }
+        ],
+        temperature: 0.2
+      });
+
+      insightResult = completion.choices[0]?.message?.content || '';
+    } else if (provider === 'openai') {
       const modelName = process.env.AI_MODEL || 'gpt-4o-mini';
       const openai = new OpenAI({ apiKey });
 
@@ -115,8 +147,8 @@ Tuliskan narasi insight eksekutif yang fokus pada data terfilter di atas:`;
 
       insightResult = completion.choices[0]?.message?.content || '';
     } else {
-      // Default: Google Gemini
-      const modelName = process.env.AI_MODEL || 'gemini-3.5-flash-lite';
+      // Default: Google Gemini (Native API)
+      const modelName = process.env.AI_MODEL || 'gemini-2.5-flash';
       const genAI = new GoogleGenerativeAI(apiKey);
       const model = genAI.getGenerativeModel({
         model: modelName,
@@ -139,7 +171,7 @@ Tuliskan narasi insight eksekutif yang fokus pada data terfilter di atas:`;
       insight: insightResult.trim(),
       meta: {
         provider,
-        model: process.env.AI_MODEL || (provider === 'openai' ? 'gpt-4o-mini' : 'gemini-3.5-flash-lite'),
+        model: process.env.AI_MODEL || (provider === 'openrouter' ? 'google/gemini-2.5-flash' : provider === 'openai' ? 'gpt-4o-mini' : 'gemini-3.5-flash-lite'),
         dataPointsCount: totalRows,
         timestamp: new Date().toISOString()
       }
